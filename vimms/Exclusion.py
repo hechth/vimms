@@ -157,6 +157,7 @@ class TopNExclusion(object):
         self.exclusion_list = []
         if initial_exclusion_list is not None:  # copy initial list, if provided
             self.exclusion_list = list(initial_exclusion_list)
+        self.exclusion_list = BoxHolder()
 
     def is_excluded(self, mz, rt):
         """
@@ -166,14 +167,7 @@ class TopNExclusion(object):
         :return: True if excluded, False otherwise
         """
         # TODO: make this faster?
-        for x in self.exclusion_list:
-            exclude_mz = x.from_mz <= mz <= x.to_mz
-            exclude_rt = x.from_rt <= rt <= x.to_rt
-            if exclude_mz and exclude_rt:
-                logger.debug(
-                    'Excluded precursor ion mz {:.4f} rt {:.2f} because of {}'.format(mz, rt, x))
-                return True
-        return False
+        return self.exclusion_list.is_in_box(mz, rt)
 
     def update(self, current_scan, ms2_tasks):
         """
@@ -182,7 +176,6 @@ class TopNExclusion(object):
         :param ms2_tasks: scheduled ms2 tasks
         """
         rt = current_scan.rt
-        temp_exclusion_list = []
         for task in ms2_tasks:
             for precursor in task.get('precursor_mz'):
                 mz = precursor.precursor_mz
@@ -193,9 +186,7 @@ class TopNExclusion(object):
                     rt,
                     x.from_mz, x.to_mz, x.from_rt, x.to_rt
                 ))
-                x = self._get_exclusion_item(mz, rt, mz_tol, rt_tol)
-                temp_exclusion_list.append(x)
-        self.exclusion_list.extend(temp_exclusion_list)
+                self.exclusion_list.add_box(x)
 
     def cleanup(self, current_scan):
         """
@@ -206,12 +197,13 @@ class TopNExclusion(object):
         """
         # current simulated time is scan start RT + scan duration
         # in the real data, scan.duration is not set, so we just use the scan rt as the current time
-        current_time = current_scan.rt
-        if current_scan.scan_duration is not None:
-            current_time += current_scan.scan_duration
-
-        # remove expired items from dynamic exclusion list
-        self.exclusion_list = list(filter(lambda x: x.to_rt > current_time, self.exclusion_list))
+        # current_time = current_scan.rt
+        # if current_scan.scan_duration is not None:
+        #     current_time += current_scan.scan_duration
+        #
+        # # remove expired items from dynamic exclusion list
+        # self.exclusion_list = list(filter(lambda x: x.to_rt > current_time, self.exclusion_list))
+        pass
 
     def _get_exclusion_item(self, mz, rt, mz_tol, rt_tol):
         mz_lower = mz * (1 - mz_tol / 1e6)
